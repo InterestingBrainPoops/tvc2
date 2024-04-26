@@ -5,30 +5,35 @@
 #include <Arduino.h>
 #include <ArduinoEigen.h>
 #include <Pose.h>
+#include <Controller.h>
+
+#include <Gimbal.h>
+using Eigen::Vector3f;
 
 Adafruit_MPU6050 mpu;
 
-float z_rotation = 0.0;
-float y_rotation = 0.0;
-float z_rotation_old = 0.0;
-float y_rotation_old = 0.0;
-float z_integral = 0.0;
-Servo thing1;
-Servo thing2;
-int thing1_pos = 90;
-int thing2_pos = 90;
+Vector3f heading{0.0, 0.0, 0.0};
+Vector3f previous_reading{0.0, 0.0, 0.0};
+Vector3f offset{0.0, 0.0, 0.0};
+Gimbal gimbal;
 int tick = 0;
+int timestep = 10;
+Controller pitch_pid;
+Controller yaw_pid;
+
 void setup(void)
 {
-  thing1.attach(23);
-  thing2.attach(22);
-  Serial.begin(115200);
-  // while (!Serial)
-  //   delay(10); // will pause Zero, Leonardo, etc until serial console opens
 
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
+  pitch_pid = Controller(2.0, 0.1, 0.0, (float)timestep / 1000.0);
+  yaw_pid = Controller(2.0, 0.1, 0.0, (float)timestep / 1000.0);
+
+  gimbal = Gimbal(21, 23, -13, -3, 30);
+
+  Serial.begin(115200);
   Serial.println("Adafruit MPU6050 test!");
-  thing1.write(thing1_pos);
-  thing2.write(thing2_pos);
+
   // Try to initialize!
   if (!mpu.begin())
   {
@@ -49,7 +54,18 @@ void setup(void)
   mpu.setMotionInterrupt(true);
 
   Serial.println("");
+
   delay(100);
+  for (int n = 0; n < 50; n++)
+  {
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+    Vector3f gyro_reading{g.gyro.x, g.gyro.y, g.gyro.z};
+    offset += gyro_reading;
+    delay(10);
+  }
+  digitalWrite(LED_BUILTIN, HIGH);
+  offset = offset / 50.0;
 }
 
 void loop()
@@ -60,27 +76,22 @@ void loop()
     /* Get new sensor events with the readings */
     sensors_event_t a, g, temp;
     mpu.getEvent(&a, &g, &temp);
+    Vector3f gyro_reading{g.gyro.x, g.gyro.y, g.gyro.z};
 
-    /* Print out the values */
-    z_rotation_old = z_rotation;
-    y_rotation_old = y_rotation;
-    z_rotation += g.gyro.z * 0.010;
-    y_rotation += g.gyro.y * 0.010;
-    // float setpoint = sin((float)tick / 50.0) * (PI / 4.0);
+    Vector3f compensated_reading = ((gyro_reading - offset) + previous_reading) / 2.0;
 
-    float setpoint = 0.0;
-    float error1 = setpoint - z_rotation;
-    z_integral += error1 * 0.010;
-    int effort1 = (int)floor(error1 * 15.0) + (int)floor(z_integral * 0.2);
-    thing1_pos += effort1;
-    thing1.write(thing1_pos);
-    Serial.printf("y_rotation %.2f, z_rotation: %.2f\n", y_rotation, z_rotation);
-    // setpoint = 0.0;
-    // float error2 = setpoint - y_rotation;
-    // int effort2 = -(int)floor(error2 * 20.0);
-    // thing2_pos += effort2;
-    thing2.write(90);
+    heading += compensated_reading * ((float)timestep / 1000.0);
+    Serial.printf(">pitch servo angle:%d\n", gimbal.get_pitch());
+    Serial.printf(">yaw servo angle:%d\n", gimbal.get_yaw());
+    Serial.printf(">integrated yaw:%.2f\n", heading.x());
+    Serial.printf(">integrated pitch:%.2f\n", heading.y());
+
+    pitch_pid.update(heading.y());
+    yaw_pid.update(heading.x());
+    int safety = 30;
+    gimbal.set_yaw(-(int)(degrees(yaw_pid.get(0.0)) * 2.25));
+    gimbal.set_pitch((int)(degrees(pitch_pid.get(0.0)) * 2.25));
   }
 
-  delay(10);
+  delay(timestep);
 }
