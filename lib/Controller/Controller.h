@@ -25,10 +25,16 @@ public:
 
     float get(float setpoint)
     {
-        float error = (setpoint - current_reading);
 
+        float error = (setpoint - current_reading);
+        float old_error = (setpoint - old_reading);
+        if ((old_error < 0) != (error < 0))
+        {
+            integral = 0.0;
+        }
         integral += dt * error;
 
-        return kp * error - ki * integral;
+        float derivative = (old_reading + current_reading) / dt;
+        return kp * error + ki * integral + kd * derivative;
     }
 };

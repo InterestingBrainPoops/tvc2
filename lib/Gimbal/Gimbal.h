@@ -59,11 +59,10 @@ public:
 
     int get_pitch()
     {
-        return pitch_angle;
+        return pitch_angle - 90 - pitch_z_offset;
     }
-
     int get_yaw()
     {
-        return yaw_angle;
+        return yaw_angle - 90 - yaw_z_offset;
     }
 };
