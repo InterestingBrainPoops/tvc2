@@ -27,11 +27,11 @@ public:
     {
 
         float error = (setpoint - current_reading);
-        float old_error = (setpoint - old_reading);
-        if ((old_error < 0) != (error < 0))
-        {
-            integral = 0.0;
-        }
+        // float old_error = (setpoint - old_reading);
+        // if ((old_error < 0) != (error < 0))
+        // {
+        //     integral = 0.0;
+        // }
         integral += dt * error;
 
         float derivative = (old_reading + current_reading) / dt;

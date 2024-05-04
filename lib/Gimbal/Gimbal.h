@@ -45,7 +45,11 @@ public:
         pitch_servo.write(pitch_zero_offset + 90);
         yaw_servo.write(pitch_zero_offset + 90);
     }
-
+    void zero()
+    {
+        pitch_servo.write(90);
+        yaw_servo.write(90);
+    }
     void set_pitch(int angle)
     {
         pitch_angle = clamp(90 + pitch_z_offset + angle, 90 + pitch_z_offset, clamp_range);
